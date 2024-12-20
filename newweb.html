@@ -1,0 +1,345 @@
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Caterpillar Drag</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f8ff;
+            position: relative;
+            z-index: 1;
+        }
+
+        .container {
+            position: relative;
+            height: 100%;
+            width: 100%;
+        }
+
+        .head {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            cursor: grab;
+            background-color: #FF6347;
+            z-index: 2;
+        }
+
+        .eye {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: black;
+            border-radius: 50%;
+            top: 20px;
+        }
+
+        .left-eye {
+            left: 20px;
+        }
+
+        .right-eye {
+            right: 20px;
+        }
+
+        .mouth {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background-color: red;
+            border-radius: 50%;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .body-part {
+            position: absolute;
+            border-radius: 50%;
+            background-color: #FF6347;
+        }
+
+        .floor {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 300px;
+            background-color: #2e8b57;
+        }
+    </style>
+    <script type="module" defer>
+        import { Chuck } from 'https://cdn.jsdelivr.net/npm/webchuck/+esm';
+    
+        let theChuck; // global variable
+    
+        document.addEventListener('mousedown', async () => {
+            // Chuck 객체 초기화 (사용자가 클릭하면 초기화)
+            if (theChuck === undefined) {
+                theChuck = await Chuck.init([]);
+            }
+            
+            // 이미 Chuck 객체가 초기화되었으면 이벤트를 처리할 준비가 되었음을 표시
+            if (theChuck) {
+                console.log("Chuck Initialized");
+            }
+        });
+    
+        document.addEventListener('DOMContentLoaded', () => {
+            const floor = document.querySelector('.floor');
+            if (!floor) {
+                console.error("Floor element not found!");
+                return;
+            }
+    
+            const caterpillars = document.querySelectorAll('.caterpillar');
+            const fixedBottomY = window.innerHeight - floor.offsetHeight - 40;
+    
+            let isDragging = false;
+            let draggingIndex = -1;
+            const lastCaterpillarIndex = caterpillars.length - 1;
+    
+            const colors = ['#FF6347', '#4682B4', '#32CD32', '#FFD700'];
+    
+            caterpillars.forEach((caterpillar, index) => {
+                const head = caterpillar.querySelector('.head');
+                const bodyParts = caterpillar.querySelectorAll('.body-part');
+    
+                const caterpillarColor = colors[index];
+                head.style.backgroundColor = caterpillarColor;
+                bodyParts.forEach((bodyPart) => {
+                    bodyPart.style.backgroundColor = caterpillarColor;
+                });
+    
+                const initialX = window.innerWidth * 0.3 + (window.innerWidth * 0.4 / (caterpillars.length + 1)) * (index + 1) - 40;
+                const initialY = fixedBottomY - 200;
+    
+                head.style.left = `${initialX}px`;
+                head.style.top = `${initialY}px`;
+    
+                bodyParts.forEach((bodyPart, bodyIndex) => {
+                    const scale = 1 - (bodyIndex * 0.1);
+                    bodyPart.style.width = `${80 * scale}px`;
+                    bodyPart.style.height = `${80 * scale}px`;
+                    bodyPart.style.left = `${initialX + 40 * bodyIndex * 0.1}px`;
+                    bodyPart.style.top = `${fixedBottomY - 40 - (bodyIndex * 160 / 3)}px`;
+                });
+    
+                head.addEventListener('mousedown', () => {
+                    draggingIndex = index;
+                    isDragging = true;
+                    head.style.transition = "none"; // 애니메이션 비활성화
+                });
+    
+                window.addEventListener('mouseup', () => {
+                    if (isDragging && draggingIndex === index) {
+                        isDragging = false;
+                        draggingIndex = -1;
+                        animateReturn(head, bodyParts, initialX, initialY);
+                    }
+                    playHarmony(i, newY, fixedBottomY);
+                });
+            });
+    
+            window.addEventListener('mousemove', (event) => {
+                if (isDragging && draggingIndex !== -1) {
+                    const head = caterpillars[draggingIndex].querySelector('.head');
+                    const bodyParts = caterpillars[draggingIndex].querySelectorAll('.body-part');
+    
+                    const newX = Math.max(550, Math.min(event.clientX, window.innerWidth - 600));
+                    const newY = Math.min(fixedBottomY - 40, Math.max(event.clientY, fixedBottomY - 400));
+    
+                    head.style.left = `${newX}px`;
+                    head.style.top = `${newY}px`;
+    
+                    let midiMin, midiMax;
+    
+                    switch (draggingIndex) {
+                        case 0:
+                            midiMin = 80;
+                            midiMax = 92;
+                            break;
+                        case 1:
+                            midiMin = 71;
+                            midiMax = 83;
+                            break;
+                        case 2:
+                            midiMin = 65;
+                            midiMax = 77;
+                            break;
+                        case 3:
+                            midiMin = 57;
+                            midiMax = 69;
+                            break;
+                    }
+    
+                    const { midi, frequency } = calculatePitch(newY, fixedBottomY - 400, fixedBottomY - 40, midiMin, midiMax);
+    
+                    // ChucK 코드에서처럼 음성을 합성하기 위한 구조
+                    if (theChuck) {
+                        theChuck.runCode(`
+                            // 기본 파형 생성
+                            SinOsc sin => ADSR env => JCRev rev => dac;
+    
+                            // 음성의 gain 설정
+                            0.25 => sin.gain;   // 원본 신호의 크기
+                            0.1 => env.gain;     // ADSR의 gain
+                            
+                            // 리버브 및 지연 효과 설정
+                            0.025 => rev.mix;   // 리버브의 믹스 비율
+    
+                            // ADSR 설정
+                            0.1::second => env.attackTime;
+                            0.3::second => env.decayTime;
+                            0.8 => env.sustainLevel;
+                            0.2::second => env.releaseTime;
+                            
+                            // 주파수 전달
+                            ${frequency} => sin.freq;
+    
+                            env.keyOn();  // 음성 시작
+    
+                            // 소리 지속 시간 조정
+                            200::ms => now;
+    
+                            env.keyOff();  // 음성 종료
+                        `);
+                    }
+    
+                    updateBodyParts(newX+15, newY+15, bodyParts);
+                }
+            });
+    
+            function updateBodyParts(headX, headY, bodyParts) {
+                const baseBodyPart = bodyParts[0];
+                const baseX = parseFloat(baseBodyPart.style.left);
+                const baseY = parseFloat(baseBodyPart.style.top);
+    
+                bodyParts.forEach((bodyPart, index) => {
+                    const ratio = index / bodyParts.length;
+                    const offsetX = (headX - baseX) * ratio;
+                    const offsetY = (headY - baseY) * ratio;
+    
+                    bodyPart.style.left = `${baseX + offsetX}px`;
+                    bodyPart.style.top = `${baseY + offsetY}px`;
+                });
+            }
+    
+            function animateReturn(head, bodyParts, targetX, targetY) {
+                const startX = parseFloat(head.style.left);
+                const startY = parseFloat(head.style.top);
+                const duration = 500;
+                const startTime = performance.now();
+    
+                function animate(time) {
+                    const elapsedTime = time - startTime;
+                    const progress = Math.min(elapsedTime / duration, 1);
+    
+                    const currentX = startX + (targetX - startX) * progress;
+                    const currentY = startY + (targetY - startY) * progress;
+    
+                    head.style.left = `${currentX}px`;
+                    head.style.top = `${currentY}px`;
+    
+                    updateBodyParts(currentX + 15, currentY + 15, bodyParts);
+    
+                    if (progress < 1) {
+                        requestAnimationFrame(animate);
+                    }
+                }
+                requestAnimationFrame(animate);
+            }
+    
+            // 추가: Y 좌표에 따라 MIDI와 진동수 계산 함수
+            function calculatePitch(y, yMin, yMax, midiMin, midiMax) {
+                const midi = Math.floor(midiMax - ((y - yMin) / (yMax - yMin)) * (midiMax - midiMin));
+                const frequency = 440 * 2 ** ((midi - 69) / 12);
+                return { midi, frequency };
+            }
+            function playHarmony(index, positionY, baseY) {
+                const midiBase = [80, 72, 65, 57];
+                const chordIntervals = [
+                [0, 4, 7], // Major
+                [0, 3, 7], // Minor
+                [0, 4, 7, 10], // Dominant 7th
+                [0, 3, 6], // Diminished
+                [0, 4, 8], // Augmented
+                ];
+
+                const selectedChord = chordIntervals[Math.floor(Math.random() * chordIntervals.length)];
+
+                const mainMidi = midiBase[index] + Math.round((baseY - positionY) / 10);
+
+                selectedChord.forEach((interval, i) => {
+                  const noteIndex = (index + i + 1) % 4;
+                  const midiNote = mainMidi + interval;
+                  const frequency = 440 * Math.pow(2, (midiNote - 69) / 12);
+
+                  if (theChuck) {
+                    theChuck.runCode(`
+                      SinOsc sin => ADSR env => dac;
+                      ${frequency} => sin.freq;
+                      env.set(0.01, 0.2, 0.8, 0.1);
+                      env.keyOn();
+                      200::ms => now;
+                      env.keyOff();
+                    `);
+                  }
+                });
+            }
+        });
+    </script>
+  </head>
+  <body>
+    <div class="container">
+        <div class="caterpillar">
+            <div class="head">
+                <div class="eye left-eye"></div>
+                <div class="eye right-eye"></div>
+                <div class="mouth"></div>
+            </div>
+            <div class="body-part"></div>
+            <div class="body-part"></div>
+            <div class="body-part"></div>
+        </div>
+        <div class="caterpillar">
+            <div class="head">
+                <div class="eye left-eye"></div>
+                <div class="eye right-eye"></div>
+                <div class="mouth"></div>
+            </div>
+            <div class="body-part"></div>
+            <div class="body-part"></div>
+            <div class="body-part"></div>
+        </div>
+        <div class="caterpillar">
+            <div class="head">
+                <div class="eye left-eye"></div>
+                <div class="eye right-eye"></div>
+                <div class="mouth"></div>
+            </div>
+            <div class="body-part"></div>
+            <div class="body-part"></div>
+            <div class="body-part"></div>
+        </div>
+        <div class="caterpillar">
+            <div class="head">
+                <div class="eye left-eye"></div>
+                <div class="eye right-eye"></div>
+                <div class="mouth"></div>
+            </div>
+            <div class="body-part"></div>
+            <div class="body-part"></div>
+            <div class="body-part"></div>
+        </div>
+        <div class="floor"></div>
+    </div>
+  </body>
+</html>
